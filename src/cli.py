@@ -50,7 +50,7 @@ def scan(
         console.print("\n[bold]Relatório de Saúde Evolutiva:[/bold]")
         console.print(report)
         
-        with open("HEALTH_REPORT.md", "w") as f:
+        with open("HEALTH_REPORT.md", "w", encoding="utf-8", newline="\n") as f:
             f.write(report)
         console.print("\n[dim]Relatório salvo em HEALTH_REPORT.md[/dim]")
 
