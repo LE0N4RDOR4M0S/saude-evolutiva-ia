@@ -9,7 +9,7 @@ class GitCollector:
         self.limit = limit_commits
 
     def collect_metrics(self):
-        print(f"📡 Analisando os últimos {self.limit} commits em {self.repo_path}...")
+        print(f"Analisando os últimos {self.limit} commits em {self.repo_path}...")
         
         churn_data = defaultdict(int)
         author_data = defaultdict(lambda: defaultdict(int))
@@ -57,8 +57,8 @@ class GitCollector:
                 author_data[filename][commit.author.name] += 1
                 seen_files.add(filename)
 
-        print(f"📊 Commits analisados: {commits_analyzed}")
-        print(f"📂 Arquivos únicos relevantes: {len(seen_files)}")
+        print(f"Commits: {commits_analyzed}")
+        print(f"Arquivos: {len(seen_files)}")
 
         hotspots = []
         for filename in seen_files:
