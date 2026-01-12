@@ -2,11 +2,14 @@ from pydriller import Repository
 from radon.complexity import cc_visit
 from collections import defaultdict
 import os
+import itertools
 
 class GitCollector:
     def __init__(self, repo_path: str, limit_commits: int = 100):
         self.repo_path = repo_path
         self.limit = limit_commits
+        self.coupling_data = defaultdict(int) 
+        self.total_commits_analyzed = 0
 
     def collect_metrics(self):
         print(f"Analisando os últimos {self.limit} commits em {self.repo_path}...")
@@ -28,42 +31,44 @@ class GitCollector:
         repo = Repository(self.repo_path, order='reverse')
         
         commit_count = 0
-        commits_analyzed = 0
         
         for commit in repo.traverse_commits():
             if commit_count >= self.limit:
                 break
             commit_count += 1
-            commits_analyzed += 1
+            self.total_commits_analyzed += 1
             
+            current_commit_files = []
+
             for modified_file in commit.modified_files:
                 filename = modified_file.filename
                 rel_path = modified_file.new_path
                 
-                if not filename: 
-                    continue
-
-                if filename in IGNORED_FILES:
-                    continue
-                if filename.lower().endswith(IGNORED_EXTENSIONS):
-                    continue
+                if not filename: continue
+                if filename in IGNORED_FILES: continue
+                if filename.lower().endswith(IGNORED_EXTENSIONS): continue
 
                 if rel_path:
                     file_paths[filename] = rel_path
 
                 churn = modified_file.added_lines + modified_file.deleted_lines
                 churn_data[filename] += churn
-                
                 author_data[filename][commit.author.name] += 1
                 seen_files.add(filename)
+                
+                current_commit_files.append(filename)
 
-        print(f"Commits: {commits_analyzed}")
+            if 1 < len(current_commit_files) <= 20:
+                sorted_files = sorted(current_commit_files)
+                for file_a, file_b in itertools.combinations(sorted_files, 2):
+                    self.coupling_data[(file_a, file_b)] += 1
+
+        print(f"Commits: {self.total_commits_analyzed}")
         print(f"Arquivos: {len(seen_files)}")
 
         hotspots = []
         for filename in seen_files:
             full_path = None
-            
             if filename in file_paths:
                  full_path = os.path.join(self.repo_path, file_paths[filename])
             
@@ -72,12 +77,10 @@ class GitCollector:
 
             if full_path and os.path.exists(full_path):
                 complexity = 1
-                
                 if filename.endswith('.py'):
                     complexity = self._calc_complexity(full_path)
 
                 total_churn = churn_data[filename]
-                
                 risk_score = total_churn * complexity
                 
                 hotspots.append({
@@ -90,6 +93,25 @@ class GitCollector:
 
         return sorted(hotspots, key=lambda x: x['risk_score'], reverse=True)[:10]
 
+    def get_coupling_analysis(self, min_shared_commits=3):
+        """
+        Retorna os pares de arquivos com maior acoplamento lógico.
+        min_shared_commits: Mínimo de vezes que devem ter mudado juntos para aparecer.
+        """
+        results = []
+        for (file_a, file_b), count in self.coupling_data.items():
+            if count >= min_shared_commits:
+                strength = (count / self.total_commits_analyzed) * 100 
+                
+                results.append({
+                    "file_a": file_a,
+                    "file_b": file_b,
+                    "shared_commits": count,
+                    "strength": f"{strength:.1f}%"
+                })
+        
+        return sorted(results, key=lambda x: x['shared_commits'], reverse=True)[:10]
+
     def _calc_complexity(self, file_path):
         """Calcula Complexidade Ciclomática (apenas Python)"""
         try:
@@ -100,7 +122,6 @@ class GitCollector:
             return 1 
 
     def _find_file(self, name):
-        """Busca recursiva caso o path do git não bata com o sistema de arquivos"""
         for root, dirs, files in os.walk(self.repo_path):
             if name in files:
                 return os.path.join(root, name)
