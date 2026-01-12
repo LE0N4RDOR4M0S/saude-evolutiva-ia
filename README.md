@@ -40,9 +40,16 @@ graph LR
 ```
 /
 ├── .env.example             # Modelo de variáveis de ambiente
-├── requirements.txt         # Dependências (PyDriller, Radon, Google GenAI)
+├── requirements.txt         # Dependências (PyDriller, Radon, Google GenAI, Streamlit)
+├── app.py                   # 🆕 Dashboard Web Interativo (Streamlit)
+├── run_dashboard.bat        # 🆕 Script de execução Windows
+├── run_dashboard.sh         # 🆕 Script de execução Linux/Mac
+├── QUICKSTART.md            # 🆕 Guia de início rápido
+├── README_DASHBOARD.md      # 🆕 Documentação do dashboard
+├── .streamlit/              # 🆕 Configurações do Streamlit
+│   └── config.toml
 └── src/
-    ├── cli.py               # Entrypoint (Typer) e Renderização (Rich)
+    ├── cli.py               # Entrypoint CLI (Typer) e Renderização (Rich)
     ├── config.py            # Configuração segura da API Key
     ├── collector.py         # Mineração do Git e Lógica de Filtros
     └── analyzer.py          # Integração com Gemini 2.5 Flash Lite
@@ -63,11 +70,39 @@ graph LR
 
 - Python 3.10+
 - Git instalado
-- Uma API Key do Google AI Studio (Pode ser gratuita)
+- Uma API Key do Google AI Studio (Opcional - necessária apenas para o Consultor IA)
 
-### Passo 1: Configuração
+### Opção 1: Dashboard Web Interativo 🆕 (Recomendado)
 
-Clone o repositório e instale as dependências:
+O dashboard Streamlit oferece uma experiência visual completa com gráficos interativos, KPIs e análise de acoplamento.
+
+```bash
+# 1. Instala dependências
+pip install -r requirements.txt
+
+# 2. Executa o dashboard
+streamlit run app.py
+# OU use os scripts de atalho:
+# Windows: run_dashboard.bat
+# Linux/Mac: ./run_dashboard.sh
+```
+
+O dashboard abrirá automaticamente em `http://localhost:8501`
+
+**Recursos do Dashboard:**
+- 📊 KPIs em tempo real (Total de arquivos, Risco médio, Bus Factor)
+- 🎯 Gráfico de dispersão interativo (Churn vs Complexidade)
+- 🔗 Análise de acoplamento lógico
+- 🤖 Consultor IA integrado com Gemini
+- 💾 Cache inteligente para performance
+- 📱 Interface responsiva e moderna
+
+📖 **Documentação completa:** [README_DASHBOARD.md](README_DASHBOARD.md)  
+🚀 **Guia rápido:** [QUICKSTART.md](QUICKSTART.md)
+
+### Opção 2: Interface CLI (Terminal)
+
+Para uso em scripts ou ambientes sem interface gráfica:
 
 ```bash
 # Cria ambiente virtual
@@ -86,7 +121,7 @@ GOOGLE_API_KEY=sua_chave_aqui
 GEMINI_MODEL=gemini-2.5-flash-lite
 ```
 
-### Passo 2: Executar Análise
+### Passo 2: Executar Análise (CLI)
 
 Aponte a ferramenta para qualquer repositório Git local (pode ser o caminho relativo ou absoluto).
 
@@ -120,8 +155,12 @@ O módulo de pagamentos apresenta alta complexidade combinada com churn recente,
 
 ## 🛠️ Stack Tecnológica
 
+### Core
 - **Linguagem**: Python 3.10
 - **Mineração de Repositórios**: PyDriller
 - **Análise Estática**: Radon (Complexidade Ciclomática)
 - **Inteligência Artificial**: Google Generative AI (Gemini 2.5 Flash Lite)
-- **Interface CLI**: Typer + Rich
+
+### Interface
+- **CLI**: Typer + Rich
+- **Dashboard Web**: Streamlit + Plotly Express + Pandas

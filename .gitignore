@@ -1,4 +1,38 @@
+# Ambiente e Configurações Sensíveis
 .env
-__pycache__/
+*.env
 
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual Environments
 /venv
+/.venv
+env/
+ENV/
+
+# Streamlit Cache
+.streamlit/secrets.toml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs e Reports
+*.log
+HEALTH_REPORT.md
+
+# Temporários
+*.tmp
+*.bak
