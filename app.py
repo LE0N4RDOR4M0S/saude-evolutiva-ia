@@ -5,6 +5,9 @@ from src.collector import GitCollector
 from src.analyzer import AIAnalyzer
 import google.generativeai as genai
 import os
+from pyvis.network import Network
+import tempfile
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="Repo Health AI",
@@ -22,9 +25,69 @@ def analyze_repository(repo_path: str, num_commits: int):
         collector = GitCollector(repo_path, limit_commits=num_commits)
         metrics = collector.collect_metrics()
         coupling = collector.get_coupling_analysis(min_shared_commits=3)
-        return metrics, coupling, None
+        logical_coupling = collector.get_logical_coupling(min_shared_commits=2)
+        return metrics, coupling, logical_coupling, None
     except Exception as e:
-        return None, None, str(e)
+        return None, None, None, str(e)
+
+
+def render_coupling_network(logical_coupling_data):
+    if not logical_coupling_data['nodes']:
+        return None
+    
+    net = Network(
+        height="700px",
+        width="100%",
+        directed=False,
+        notebook=True
+    )
+    
+    net.set_options("""
+    {
+        "physics": {
+            "enabled": true,
+            "stabilization": {
+                "iterations": 200
+            },
+            "barnesHut": {
+                "gravitationalConstant": -40000,
+                "centralGravity": 0.3,
+                "springLength": 300,
+                "springConstant": 0.04
+            }
+        }
+    }
+    """)
+    
+    for node in logical_coupling_data['nodes']:
+        net.add_node(
+            node['id'],
+            label=node['label'],
+            size=node['size'],
+            color=node['color'],
+            title=node['title']
+        )
+    
+    max_weight = logical_coupling_data['stats']['max_coupling_strength']
+    
+    for edge in logical_coupling_data['edges']:
+        weight = edge['weight']
+        thickness = 1 + (weight / max_weight * 9) if max_weight > 0 else 1
+        
+        net.add_edge(
+            edge['source'],
+            edge['target'],
+            weight=weight,
+            title=edge['title'],
+            width=thickness,
+            color='rgba(75, 139, 255, 0.6)'
+        )
+    
+    html_str = net.generate_html()
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+        f.write(html_str)
+        return f.name
+
 
 
 def format_authors(authors_dict):
@@ -108,7 +171,7 @@ if api_key:
     genai.configure(api_key=api_key)
 
 with st.spinner(f"Analisando os últimos {num_commits} commits... (pode levar alguns minutos)"):
-    metrics, coupling, error = analyze_repository(repo_path, num_commits)
+    metrics, coupling, logical_coupling, error = analyze_repository(repo_path, num_commits)
 
 if error:
     st.error(f"Erro ao analisar o repositório: {error}")
@@ -155,10 +218,11 @@ with col3:
 
 st.markdown("---")
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Visão Geral",
     "Matriz de Risco",
-    "Acoplamento",
+    "Acoplamento Lógico",
+    "🕸️ Diagrama de Rede",
     "Consultor IA"
 ])
 
@@ -353,6 +417,60 @@ with tab3:
         st.info("ℹNenhum acoplamento significativo detectado (mínimo: 3 commits compartilhados).")
 
 with tab4:
+    st.markdown("### 🕸️ Diagrama de Rede de Acoplamento Lógico")
+    st.markdown(
+        "Visualização interativa dos arquivos e suas dependências implícitas. "
+        "**Nós:** arquivos | **Arestas:** co-ocorrência em commits | **Tamanho:** risk score | **Cor:** tipo de arquivo"
+    )
+    
+    if logical_coupling and logical_coupling['nodes']:
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total de Arquivos Acoplados", logical_coupling['stats']['total_nodes'])
+        
+        with col2:
+            st.metric("Conexões Detectadas", logical_coupling['stats']['total_edges'])
+        
+        with col3:
+            st.metric("Força Máxima", int(logical_coupling['stats']['max_coupling_strength']))
+        
+        st.markdown("---")
+        
+        html_file = render_coupling_network(logical_coupling)
+        
+        if html_file:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            components.html(html_content, height=750)
+            
+            st.markdown("---")
+            st.markdown("#### Legenda de Cores")
+            
+            color_legend = {
+                "🔵 Python": "#4B8BFF",
+                "🟡 JavaScript": "#FFD700",
+                "🟦 TypeScript": "#3178C6",
+                "🟠 Java": "#FF6B35",
+                "🔶 Go": "#00ADD8",
+                "⚫ Outro": "#CCCCCC"
+            }
+            
+            col1, col2, col3 = st.columns(3)
+            for i, (label, color) in enumerate(color_legend.items()):
+                col = [col1, col2, col3][i % 3]
+                with col:
+                    st.markdown(
+                        f"<span style='color: {color};'>●</span> {label}",
+                        unsafe_allow_html=True
+                    )
+        else:
+            st.warning("Não foi possível gerar o diagrama. Nenhum acoplamento significativo detectado.")
+    else:
+        st.info("Nenhum acoplamento lógico detectado com a métrica atual (mínimo: 2 commits compartilhados).")
+
+with tab5:
     st.markdown("### Consultor IA Gemini")
     st.markdown(
         "Use a IA para obter insights avançados sobre a saúde do repositório. "
