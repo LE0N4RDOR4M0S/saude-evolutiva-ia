@@ -14,16 +14,16 @@ O projeto funciona como um pipeline de mineração de dados que transforma commi
 ```mermaid
 graph LR
     Repo[(Git Repository)] -->|PyDriller| Collector[Git Collector]
-    
+  
     subgraph "Processing Layer"
         Collector -->|1. Filtra Ruído| Filter{Logic Filter}
         Filter -->|2. Calcula Risco| Metrics[Churn x Complexity]
         Metrics -->|3. JSON Sumarizado| AI_Client[AI Analyzer]
     end
-    
+  
     AI_Client -->|4. Prompt Eng.| Gemini((Google Gemini))
     Gemini -->|5. Markdown Report| CLI[Rich Terminal Output]
-    
+  
     style Gemini fill:#8E75B2,stroke:#333,color:#fff
     style Collector fill:#3776AB,stroke:#333,color:#fff
 ```
@@ -57,12 +57,13 @@ graph LR
 
 ## 🔍 Destaques de Código
 
-| Recurso | Arquivo | Descrição |
-|---------|---------|-----------|
-| Filtro de Ruído | `collector.py` | Lógica para ignorar package-lock.json, imagens e assets compilados |
-| Cálculo de Risco | `collector.py` | Fórmula Risk Score = Churn * Complexity (com fallback para não-Python) |
-| Prompt Seguro | `analyzer.py` | Prompt estruturado que envia apenas JSON de metadados, economizando tokens |
-| Visualização | `cli.py` | Uso da biblioteca Rich para tabelas interativas no terminal |
+
+| Recurso           | Arquivo        | Descrição                                                                |
+| ----------------- | -------------- | -------------------------------------------------------------------------- |
+| Filtro de Ruído  | `collector.py` | Lógica para ignorar package-lock.json, imagens e assets compilados        |
+| Cálculo de Risco | `collector.py` | Fórmula Risk Score = Churn * Complexity (com fallback para não-Python)   |
+| Prompt Seguro     | `analyzer.py`  | Prompt estruturado que envia apenas JSON de metadados, economizando tokens |
+| Visualização    | `cli.py`       | Uso da biblioteca Rich para tabelas interativas no terminal                |
 
 ## 🚀 Como Rodar Localmente
 
@@ -90,6 +91,7 @@ streamlit run app.py
 O dashboard abrirá automaticamente em `http://localhost:8501`
 
 **Recursos do Dashboard:**
+
 - 📊 KPIs em tempo real (Total de arquivos, Risco médio, Bus Factor)
 - 🎯 Gráfico de dispersão interativo (Churn vs Complexidade)
 - 🔗 Análise de acoplamento lógico
@@ -97,7 +99,7 @@ O dashboard abrirá automaticamente em `http://localhost:8501`
 - 💾 Cache inteligente para performance
 - 📱 Interface responsiva e moderna
 
-📖 **Documentação completa:** [docs/README_DASHBOARD.md](README_DASHBOARD.md)  
+📖 **Documentação completa:** [docs/README_DASHBOARD.md](README_DASHBOARD.md)
 🚀 **Guia rápido:** [docs/QUICKSTART.md](QUICKSTART.md)
 
 ### Opção 2: Interface CLI (Terminal)
@@ -156,11 +158,13 @@ O módulo de pagamentos apresenta alta complexidade combinada com churn recente,
 ## 🛠️ Stack Tecnológica
 
 ### Core
+
 - **Linguagem**: Python 3.10
 - **Mineração de Repositórios**: PyDriller
 - **Análise Estática**: Radon (Complexidade Ciclomática)
 - **Inteligência Artificial**: Google Generative AI (Gemini 2.5 Flash Lite)
 
 ### Interface
+
 - **CLI**: Typer + Rich
 - **Dashboard Web**: Streamlit + Plotly Express + Pandas
