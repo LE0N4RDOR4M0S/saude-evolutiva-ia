@@ -535,7 +535,7 @@ with tab5:
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #666;'>"
-    "Repo Health AI v1.0"
+    "Repo Health AI v2.0"
     "</div>",
     unsafe_allow_html=True
 )
