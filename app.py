@@ -31,7 +31,14 @@ def analyze_repository(repo_path: str, num_commits: int):
         return None, None, None, str(e)
 
 
-def render_coupling_network(logical_coupling_data):
+def get_file_extension(filename: str) -> str:
+    """Extrai a extensão do arquivo."""
+    if '.' in filename:
+        return filename.split('.')[-1].lower()
+    return 'unknown'
+
+
+def render_coupling_network(logical_coupling_data, filtered_file_types=None):
     if not logical_coupling_data['nodes']:
         return None
     
@@ -59,7 +66,16 @@ def render_coupling_network(logical_coupling_data):
     }
     """)
     
-    for node in logical_coupling_data['nodes']:
+    nodes_to_add = logical_coupling_data['nodes']
+    if filtered_file_types and len(filtered_file_types) > 0:
+        nodes_to_add = [
+            node for node in logical_coupling_data['nodes']
+            if get_file_extension(node['label']) in filtered_file_types
+        ]
+    
+    node_ids_to_add = {node['id'] for node in nodes_to_add}
+    
+    for node in nodes_to_add:
         net.add_node(
             node['id'],
             label=node['label'],
@@ -71,17 +87,18 @@ def render_coupling_network(logical_coupling_data):
     max_weight = logical_coupling_data['stats']['max_coupling_strength']
     
     for edge in logical_coupling_data['edges']:
-        weight = edge['weight']
-        thickness = 1 + (weight / max_weight * 9) if max_weight > 0 else 1
-        
-        net.add_edge(
-            edge['source'],
-            edge['target'],
-            weight=weight,
-            title=edge['title'],
-            width=thickness,
-            color='rgba(75, 139, 255, 0.6)'
-        )
+        if edge['source'] in node_ids_to_add and edge['target'] in node_ids_to_add:
+            weight = edge['weight']
+            thickness = 1 + (weight / max_weight * 9) if max_weight > 0 else 1
+            
+            net.add_edge(
+                edge['source'],
+                edge['target'],
+                weight=weight,
+                title=edge['title'],
+                width=thickness,
+                color='rgba(75, 139, 255, 0.6)'
+            )
     
     html_str = net.generate_html()
     with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
@@ -437,7 +454,33 @@ with tab4:
         
         st.markdown("---")
         
-        html_file = render_coupling_network(logical_coupling)
+        file_types = set()
+        for node in logical_coupling['nodes']:
+            ext = get_file_extension(node['label'])
+            file_types.add(ext)
+        
+        file_types = sorted(file_types)
+        
+        st.markdown("### Filtrar por Tipo de Arquivo")
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            selected_file_types = st.multiselect(
+                "Selecione os tipos de arquivo para exibir",
+                options=file_types,
+                default=file_types,
+                help="Desmarque os tipos que deseja ocultar do diagrama"
+            )
+        
+        with col2:
+            if st.button("Mostrar Todos"):
+                st.session_state.selected_types = file_types
+                st.rerun()
+        
+        st.markdown("---")
+        
+        html_file = render_coupling_network(logical_coupling, selected_file_types if selected_file_types else None)
         
         if html_file:
             with open(html_file, 'r', encoding='utf-8') as f:
