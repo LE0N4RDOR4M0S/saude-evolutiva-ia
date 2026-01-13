@@ -99,8 +99,8 @@ O dashboard abrirá automaticamente em `http://localhost:8501`
 - 💾 Cache inteligente para performance
 - 📱 Interface responsiva e moderna
 
-📖 **Documentação completa:** [docs/README_DASHBOARD.md](README_DASHBOARD.md)
-🚀 **Guia rápido:** [docs/QUICKSTART.md](QUICKSTART.md)
+📖 **Documentação completa:** [README_DASHBOARD.md](docs/README_DASHBOARD.md)
+🚀 **Guia rápido:** [QUICKSTART.md](docs/QUICKSTART.md)
 
 ### Opção 2: Interface CLI (Terminal)
 
