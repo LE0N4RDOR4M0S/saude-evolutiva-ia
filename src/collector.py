@@ -162,6 +162,7 @@ class GitCollector:
                         risk_score = metrics.get('risk_score', 0)
                         
                         # Tamanho do nó - risk_score
+                        min_size, max_size = 15, 50
                         all_risks = [m.get('risk_score', 0) for m in self.all_files_metrics.values()]
                         max_risk = max(all_risks) if all_risks else 1
                         node_size = min_size + (risk_score / max_risk * (max_size - min_size)) if max_risk > 0 else min_size
