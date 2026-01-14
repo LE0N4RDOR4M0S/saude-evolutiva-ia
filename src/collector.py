@@ -1,8 +1,8 @@
 from pydriller import Repository
-from radon.complexity import cc_visit
 from collections import defaultdict
 import os
 import itertools
+import lizard
 
 class GitCollector:
     def __init__(self, repo_path: str, limit_commits: int = 100):
@@ -78,7 +78,7 @@ class GitCollector:
                     self.coupling_data[(file_a, file_b)] += 1
 
         print(f"Commits: {self.total_commits_analyzed}")
-        print(f"Arquivos: {len(seen_files)}")
+        print(f"Arquivos únicos tocados: {len(seen_files)}")
 
         hotspots = []
         for filename in seen_files:
@@ -89,26 +89,25 @@ class GitCollector:
             if not full_path or not os.path.exists(full_path):
                 full_path = self._find_file(filename)
 
+            complexity = 1
             if full_path and os.path.exists(full_path):
-                complexity = 1
-                if filename.endswith('.py'):
-                    complexity = self._calc_complexity(full_path)
+                complexity = self._calc_complexity(full_path)
 
-                total_churn = churn_data[filename]
-                risk_score = total_churn * complexity
-                
-                hotspot = {
-                    "file": filename,
-                    "churn": total_churn,
-                    "complexity": complexity,
-                    "risk_score": risk_score,
-                    "top_authors": dict(sorted(author_data[filename].items(), key=lambda x: x[1], reverse=True)[:2])
-                }
-                hotspots.append(hotspot)
-                self.all_files_metrics[filename] = hotspot
+            total_churn = churn_data[filename]
+            risk_score = total_churn * complexity
+            
+            hotspot = {
+                "file": filename,
+                "churn": total_churn,
+                "complexity": complexity,
+                "risk_score": risk_score,
+                "top_authors": dict(sorted(author_data[filename].items(), key=lambda x: x[1], reverse=True)[:2])
+            }
+            hotspots.append(hotspot)
+            self.all_files_metrics[filename] = hotspot
 
         return sorted(hotspots, key=lambda x: x['risk_score'], reverse=True)[:10]
-
+    
     def get_coupling_analysis(self, min_shared_commits=3):
         """
         Retorna os pares de arquivos com maior acoplamento lógico.
@@ -199,13 +198,17 @@ class GitCollector:
 
 
     def _calc_complexity(self, file_path):
-        """Calcula Complexidade Ciclomática (apenas Python)"""
+        """Calcula Complexidade Ciclomática"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                code = f.read()
-                return sum([block.complexity for block in cc_visit(code)])
-        except Exception:
-            return 1 
+            analysis = lizard.analyze_file(file_path)
+            if not analysis.function_list:
+                return 1
+            total_cc = sum([func.cyclomatic_complexity for func in analysis.function_list])
+            return total_cc
+
+        except Exception as e:
+            print(f"Erro ao processar {file_path}: {e}")
+            return 0
 
     def _find_file(self, name):
         for root, dirs, files in os.walk(self.repo_path):
