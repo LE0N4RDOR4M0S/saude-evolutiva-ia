@@ -33,16 +33,16 @@ class AIAnalyzer:
         [TAREFA]
         Gere um relatório técnico em Markdown com as seções:
         
-        ## 🚨 Diagnóstico de Saúde
+        ## Diagnóstico de Saúde
         Resumo executivo do estado atual.
         
-        ## 🔥 Análise de Risco (Top Hotspots)
+        ## Análise de Risco (Top Hotspots)
         Destaque 2 ou 3 arquivos mais críticos e explique o porquê baseado nos números.
         
-        ## 👥 Risco Humano (Silos de Conhecimento)
+        ## Risco Humano (Silos de Conhecimento)
         Identifique se há dependência excessiva de desenvolvedores específicos.
         
-        ## 🛠 Plano de Ação Imediato
+        ## Plano de Ação Imediato
         3 tarefas técnicas práticas (ex: "Refatorar classe X", "Criar testes para Y", "Quebrar módulo Z").
         """
 

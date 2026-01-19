@@ -252,14 +252,12 @@ with tab1:
         st.markdown("**Distribuição de Risco:**")
         st.dataframe(
             df[["risk_score"]].describe().T,
-            use_container_width=True
         )
     
     with col2:
         st.markdown("**Distribuição de Complexidade:**")
         st.dataframe(
             df[["complexity"]].describe().T,
-            use_container_width=True
         )
     
     st.markdown("---")
@@ -282,7 +280,6 @@ with tab1:
             "authors_display": st.column_config.TextColumn("Principais Autores", width="medium")
         },
         hide_index=True,
-        use_container_width=True
     )
 
 with tab2:
@@ -333,7 +330,7 @@ with tab2:
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig)
     
     st.markdown("---")
     st.markdown("### Tabela Interativa com Filtros")
@@ -374,7 +371,6 @@ with tab2:
             "is_hotspot": st.column_config.CheckboxColumn("Hotspot")
         },
         hide_index=True,
-        use_container_width=True,
         height=400
     )
 
@@ -399,8 +395,7 @@ with tab3:
                 ),
                 "strength": st.column_config.TextColumn("Força do Acoplamento")
             },
-            hide_index=True,
-            use_container_width=True
+            hide_index=True
         )
         
         st.markdown("---")
@@ -428,7 +423,7 @@ with tab3:
             yaxis={'categoryorder': 'total ascending'}
         )
         
-        st.plotly_chart(fig_coupling, use_container_width=True)
+        st.plotly_chart(fig_coupling)
         
     else:
         st.info("ℹNenhum acoplamento significativo detectado (mínimo: 3 commits compartilhados).")
