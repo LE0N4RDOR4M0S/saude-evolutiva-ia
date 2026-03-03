@@ -4,12 +4,13 @@ import plotly.express as px
 from collections import defaultdict, deque
 import time
 import uuid
+from datetime import datetime
 from src.collector import GitCollector
 from src.analyzer import AIAnalyzer
 from src.config import Config
 from src.repo_source import RepositoryPreparationError, RepositorySourceManager
+from src.exporters import build_export_payload, build_markdown_export, build_pdf_export
 import google.generativeai as genai
-import os
 from pyvis.network import Network
 import tempfile
 import streamlit.components.v1 as components
@@ -187,6 +188,42 @@ def calculate_kpis(df):
     return total_files, avg_risk, bus_factor
 
 
+@st.dialog("Exportar Análise")
+def render_export_modal(export_ts: str, export_json_content: str, export_markdown_content: str, export_pdf_content, pdf_export_error: str = None):
+    st.markdown("Escolha o formato de exportação:")
+
+    st.download_button(
+        label="JSON",
+        data=export_json_content,
+        file_name=f"repo_health_analysis_{export_ts}.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+
+    st.download_button(
+        label="Markdown",
+        data=export_markdown_content,
+        file_name=f"repo_health_analysis_{export_ts}.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+
+    if export_pdf_content:
+        st.download_button(
+            label="PDF",
+            data=export_pdf_content,
+            file_name=f"repo_health_analysis_{export_ts}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    elif pdf_export_error:
+        st.warning(f"PDF indisponível: {pdf_export_error}")
+
+    if st.button("Fechar", use_container_width=True):
+        st.session_state["show_export_modal"] = False
+        st.rerun()
+
+
 st.sidebar.title("Configurações")
 st.sidebar.markdown("---")
 
@@ -342,6 +379,59 @@ df["is_hotspot"] = df["risk_score"] > threshold
 df["authors_display"] = df["top_authors"].apply(format_authors)
 
 total_files, avg_risk, bus_factor = calculate_kpis(df)
+
+export_json_content = build_export_payload(
+    repository_identifier=repository_identifier,
+    num_commits=num_commits,
+    total_files=total_files,
+    avg_risk=avg_risk,
+    bus_factor=bus_factor,
+    metrics=metrics,
+    coupling=coupling,
+    logical_coupling=logical_coupling,
+    ai_report=st.session_state.get("last_ai_report"),
+)
+
+export_markdown_content = build_markdown_export(
+    repository_identifier=repository_identifier,
+    num_commits=num_commits,
+    total_files=total_files,
+    avg_risk=avg_risk,
+    bus_factor=bus_factor,
+    metrics=metrics,
+    coupling=coupling,
+    ai_report=st.session_state.get("last_ai_report"),
+)
+
+pdf_export_error = None
+export_pdf_content = None
+try:
+    export_pdf_content = build_pdf_export(
+        repository_identifier=repository_identifier,
+        num_commits=num_commits,
+        total_files=total_files,
+        avg_risk=avg_risk,
+        bus_factor=bus_factor,
+        metrics=metrics,
+        coupling=coupling,
+    )
+except Exception as e:
+    pdf_export_error = str(e)
+
+export_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+st.sidebar.markdown("### Exportar Análise")
+
+if st.sidebar.button("Exportar Análise", type="primary"):
+    st.session_state["show_export_modal"] = True
+
+if st.session_state.get("show_export_modal", False):
+    render_export_modal(
+        export_ts=export_ts,
+        export_json_content=export_json_content,
+        export_markdown_content=export_markdown_content,
+        export_pdf_content=export_pdf_content,
+        pdf_export_error=pdf_export_error,
+    )
 
 st.markdown("### Indicadores Principais")
 col1, col2, col3 = st.columns(3)
@@ -692,6 +782,7 @@ with tab5:
                 try:
                     analyzer = AIAnalyzer()
                     analysis = analyzer.analyze_health(data_for_ai)
+                    st.session_state["last_ai_report"] = analysis
                     
                     st.markdown("---")
                     st.markdown("### Relatório de Análise")
