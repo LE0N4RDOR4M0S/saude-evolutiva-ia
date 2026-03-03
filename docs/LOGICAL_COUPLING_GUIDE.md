@@ -22,7 +22,7 @@ streamlit run app.py
    - **Aba 1 - Visão Geral**: Top 10 arquivos com maior risco
    - **Aba 2 - Matriz de Risco**: Scatter plot Churn vs Complexidade
    - **Aba 3 - Acoplamento Lógico**: Tabela e gráfico de pares
-   - **Aba 4 - 🕸️ Diagrama de Rede** ← **NOVA FEATURE**
+   - **Aba 4 - Diagrama de Rede** ← **NOVA FEATURE**
    - **Aba 5 - Consultor IA**: Análise com Gemini
 
 ## Entendendo o Diagrama de Rede

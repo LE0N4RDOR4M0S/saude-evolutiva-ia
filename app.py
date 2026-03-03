@@ -1,13 +1,54 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from collections import defaultdict, deque
+import time
+import uuid
 from src.collector import GitCollector
 from src.analyzer import AIAnalyzer
+from src.config import Config
+from src.repo_source import RepositoryPreparationError, RepositorySourceManager
 import google.generativeai as genai
 import os
 from pyvis.network import Network
 import tempfile
 import streamlit.components.v1 as components
+
+RATE_LIMIT_BUCKETS = defaultdict(deque)
+
+
+def get_client_key() -> str:
+    if "client_session_id" not in st.session_state:
+        st.session_state.client_session_id = str(uuid.uuid4())
+
+    headers = {}
+    context = getattr(st, "context", None)
+    if context is not None:
+        headers = getattr(context, "headers", {}) or {}
+
+    forwarded_ip = None
+    if hasattr(headers, "get"):
+        forwarded_ip = headers.get("x-forwarded-for") or headers.get("X-Forwarded-For")
+        if forwarded_ip:
+            forwarded_ip = str(forwarded_ip).split(",")[0].strip()
+
+    return f"{forwarded_ip or 'session'}:{st.session_state.client_session_id}"
+
+
+def consume_rate_limit(client_key: str, max_requests: int, window_seconds: int):
+    now = time.time()
+    window_start = now - window_seconds
+    bucket = RATE_LIMIT_BUCKETS[client_key]
+
+    while bucket and bucket[0] < window_start:
+        bucket.popleft()
+
+    if len(bucket) >= max_requests:
+        retry_after = max(1, int(window_seconds - (now - bucket[0])))
+        return False, retry_after
+
+    bucket.append(now)
+    return True, 0
 
 st.set_page_config(
     page_title="Repo Health AI",
@@ -16,7 +57,7 @@ st.set_page_config(
 )
 
 @st.cache_data(show_spinner=False)
-def analyze_repository(repo_path: str, num_commits: int):
+def analyze_repository(repo_path: str, num_commits: int, cache_key: str):
     """
     Minera o repositório Git e retorna métricas.
     Cache é essencial pois o processo pode ser demorado.
@@ -29,6 +70,21 @@ def analyze_repository(repo_path: str, num_commits: int):
         return metrics, coupling, logical_coupling, None
     except Exception as e:
         return None, None, None, str(e)
+
+
+def prepare_repository(source_mode: str, local_path: str, remote_url: str, num_commits: int):
+    manager = RepositorySourceManager(
+        git_timeout=Config.GIT_TIMEOUT_SECONDS,
+        cache_ttl_hours=Config.REPO_CACHE_TTL_HOURS,
+    )
+    manager.cleanup_stale_cache()
+
+    #Local if source_mode == "Local":
+    #Local     prepared = manager.prepare_local_repository(local_path)
+    #Local     return prepared, local_path
+
+    prepared = manager.prepare_remote_repository(remote_url, depth=num_commits)
+    return prepared, remote_url
 
 
 def get_file_extension(filename: str) -> str:
@@ -134,19 +190,54 @@ def calculate_kpis(df):
 st.sidebar.title("Configurações")
 st.sidebar.markdown("---")
 
-repo_path = st.sidebar.text_input(
-    "Caminho do Repositório (Local)",
-    value="",
-    placeholder="C:/Users/seu-nome/seu-repo",
-    help="Digite o caminho completo do repositório Git local"
-)
+cloud_mode = Config.APP_CLOUD_MODE
 
-api_key = st.sidebar.text_input(
+source_mode = "Remoto"
+#Local if cloud_mode:
+#Local     st.sidebar.info("Modo cloud ativo: entrada por URL Git remota.")
+#Local     source_mode = "Remoto"
+#Local else:
+#Local     source_mode = st.sidebar.radio(
+#Local         "Fonte do Repositório",
+#Local         options=["Local", "Remoto"],
+#Local         horizontal=True,
+#Local         help="Use Local para desenvolvimento e Remoto para análise via URL Git."
+#Local     )
+
+repo_path = ""
+repo_url = ""
+
+repo_url = st.sidebar.text_input(
+    "URL do Repositório Git",
+    value="",
+    placeholder="https://github.com/org/projeto.git",
+    help="Informe uma URL Git pública ou com acesso permitido no ambiente."
+)
+#Local if source_mode == "Local":
+#Local     repo_path = st.sidebar.text_input(
+#Local         "Caminho do Repositório (Local)",
+#Local         value="",
+#Local         placeholder="C:/Users/seu-nome/seu-repo",
+#Local         help="Digite o caminho completo do repositório Git local"
+#Local     )
+#Local else:
+#Local     repo_url = st.sidebar.text_input(
+#Local         "URL do Repositório Git",
+#Local         value="",
+#Local         placeholder="https://github.com/org/projeto.git",
+#Local         help="Informe uma URL Git pública ou com acesso permitido no ambiente."
+#Local     )
+
+api_key_input = st.sidebar.text_input(
     "API Key do Google (Gemini)",
     type="password",
     placeholder="Cole sua chave aqui",
     help="Obtenha em: https://aistudio.google.com/app/apikey"
 )
+active_api_key = api_key_input.strip() if api_key_input else (Config.GOOGLE_API_KEY or "")
+
+if not active_api_key:
+    st.sidebar.warning("GOOGLE_API_KEY não configurada no ambiente. O consultor IA ficará indisponível.")
 
 num_commits = st.sidebar.slider(
     "Número de Commits a Analisar",
@@ -161,13 +252,12 @@ st.sidebar.markdown("---")
 
 if st.sidebar.button("Limpar Cache e Recarregar"):
     st.cache_data.clear()
+    st.session_state.pop("analysis_result", None)
     st.rerun()
 
+run_analysis = st.sidebar.button("Analisar Repositório", type="primary")
+
 st.sidebar.markdown("---")
-st.sidebar.info(
-    "**Dica:** O cache acelera análises repetidas. "
-    "Use 'Limpar Cache' apenas se mudar o repositório."
-)
 
 st.title("Repo Health AI")
 st.markdown(
@@ -176,19 +266,65 @@ st.markdown(
 )
 st.markdown("---")
 
-if not repo_path:
-    st.warning("Configure o caminho do repositório na barra lateral para começar.")
+#Local if source_mode == "Local" and not repo_path:
+#Local     st.warning("Configure o caminho do repositório na barra lateral para começar.")
+#Local     st.stop()
+
+if source_mode == "Remoto" and not repo_url:
+    st.warning("Configure a URL do repositório Git na barra lateral para começar.")
     st.stop()
 
-if not os.path.exists(repo_path):
-    st.error(f"Caminho inválido: `{repo_path}`. Verifique se o diretório existe.")
+if active_api_key:
+    genai.configure(api_key=active_api_key)
+
+if run_analysis:
+    client_key = get_client_key()
+    allowed, retry_after = consume_rate_limit(
+        client_key,
+        Config.RATE_LIMIT_MAX_REQUESTS,
+        Config.RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if not allowed:
+        st.error(
+            f"Rate limit atingido. Tente novamente em aproximadamente {retry_after}s."
+        )
+        st.stop()
+
+    try:
+        prepared_repo, repository_identifier = prepare_repository(
+            source_mode=source_mode,
+            local_path=repo_path,
+            remote_url=repo_url,
+            num_commits=num_commits,
+        )
+    except RepositoryPreparationError as e:
+        st.error(f"Erro ao preparar repositório: {str(e)}")
+        st.stop()
+
+    with st.spinner(f"Analisando os últimos {num_commits} commits... (pode levar alguns minutos)"):
+        metrics, coupling, logical_coupling, error = analyze_repository(
+            prepared_repo.path,
+            num_commits,
+            cache_key=f"{prepared_repo.source_id}:{prepared_repo.revision}:{num_commits}",
+        )
+
+    st.session_state.analysis_result = {
+        "metrics": metrics,
+        "coupling": coupling,
+        "logical_coupling": logical_coupling,
+        "error": error,
+        "repository_identifier": repository_identifier,
+    }
+
+if "analysis_result" not in st.session_state:
+    st.info("Configure os parâmetros e clique em 'Analisar Repositório'.")
     st.stop()
 
-if api_key:
-    genai.configure(api_key=api_key)
-
-with st.spinner(f"Analisando os últimos {num_commits} commits... (pode levar alguns minutos)"):
-    metrics, coupling, logical_coupling, error = analyze_repository(repo_path, num_commits)
+metrics = st.session_state.analysis_result["metrics"]
+coupling = st.session_state.analysis_result["coupling"]
+logical_coupling = st.session_state.analysis_result["logical_coupling"]
+error = st.session_state.analysis_result["error"]
+repository_identifier = st.session_state.analysis_result["repository_identifier"]
 
 if error:
     st.error(f"Erro ao analisar o repositório: {error}")
@@ -239,7 +375,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Visão Geral",
     "Matriz de Risco",
     "Acoplamento Lógico",
-    "🕸️ Diagrama de Rede",
+    "Diagrama de Rede",
     "Consultor IA"
 ])
 
@@ -429,7 +565,7 @@ with tab3:
         st.info("ℹNenhum acoplamento significativo detectado (mínimo: 3 commits compartilhados).")
 
 with tab4:
-    st.markdown("### 🕸️ Diagrama de Rede de Acoplamento Lógico")
+    st.markdown("### Diagrama de Rede de Acoplamento Lógico")
     st.markdown(
         "Visualização interativa dos arquivos e suas dependências implícitas. "
         "**Nós:** arquivos | **Arestas:** co-ocorrência em commits | **Tamanho:** risk score | **Cor:** tipo de arquivo"
@@ -515,7 +651,7 @@ with tab5:
         "A análise considera Hotspots, Bus Factor e Acoplamento Lógico."
     )
     
-    if not api_key:
+    if not active_api_key:
         st.warning("Configure a API Key do Google Gemini na barra lateral para usar esta funcionalidade.")
     else:
         st.markdown("---")
@@ -541,7 +677,7 @@ with tab5:
             top_files = df.nlargest(top_n, "risk_score").to_dict(orient="records")
             
             data_for_ai = {
-                "repository_path": repo_path,
+                "repository_path": repository_identifier,
                 "total_commits_analyzed": num_commits,
                 "total_files": total_files,
                 "bus_factor": bus_factor,

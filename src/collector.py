@@ -36,7 +36,6 @@ class GitCollector:
         
         churn_data = defaultdict(int)
         author_data = defaultdict(lambda: defaultdict(int))
-        file_paths = {}
         seen_files = set()
 
         repo = Repository(self.repo_path, order='reverse')
@@ -55,19 +54,17 @@ class GitCollector:
             for modified_file in commit.modified_files:
                 filename = modified_file.filename
                 rel_path = modified_file.new_path
+                file_key = rel_path or filename
                 
                 if self.should_ignore(filename, rel_path):
                     continue
 
-                if rel_path:
-                    file_paths[filename] = rel_path
-
                 churn = modified_file.added_lines + modified_file.deleted_lines
-                churn_data[filename] += churn
-                author_data[filename][commit.author.name] += 1
-                seen_files.add(filename)
+                churn_data[file_key] += churn
+                author_data[file_key][commit.author.name] += 1
+                seen_files.add(file_key)
                 
-                current_commit_files.append(filename)
+                current_commit_files.append(file_key)
 
             if len(current_commit_files) > mass_update_threshold:
                 continue
@@ -81,30 +78,31 @@ class GitCollector:
         print(f"Arquivos únicos tocados: {len(seen_files)}")
 
         hotspots = []
-        for filename in seen_files:
+        for file_key in seen_files:
             full_path = None
-            if filename in file_paths:
-                 full_path = os.path.join(self.repo_path, file_paths[filename])
+            candidate_path = os.path.join(self.repo_path, file_key.replace('/', os.sep))
+            if os.path.exists(candidate_path):
+                full_path = candidate_path
             
             if not full_path or not os.path.exists(full_path):
-                full_path = self._find_file(filename)
+                full_path = self._find_file(file_key)
 
             complexity = 1
             if full_path and os.path.exists(full_path):
                 complexity = self._calc_complexity(full_path)
 
-            total_churn = churn_data[filename]
+            total_churn = churn_data[file_key]
             risk_score = total_churn * complexity
             
             hotspot = {
-                "file": filename,
+                "file": file_key,
                 "churn": total_churn,
                 "complexity": complexity,
                 "risk_score": risk_score,
-                "top_authors": dict(sorted(author_data[filename].items(), key=lambda x: x[1], reverse=True)[:2])
+                "top_authors": dict(sorted(author_data[file_key].items(), key=lambda x: x[1], reverse=True)[:2])
             }
             hotspots.append(hotspot)
-            self.all_files_metrics[filename] = hotspot
+            self.all_files_metrics[file_key] = hotspot
 
         return sorted(hotspots, key=lambda x: x['risk_score'], reverse=True)[:10]
     
@@ -211,7 +209,13 @@ class GitCollector:
             return 0
 
     def _find_file(self, name):
+        if '/' in name or os.sep in name:
+            path_candidate = os.path.join(self.repo_path, name.replace('/', os.sep))
+            if os.path.exists(path_candidate):
+                return path_candidate
+
+        basename = os.path.basename(name)
         for root, dirs, files in os.walk(self.repo_path):
-            if name in files:
-                return os.path.join(root, name)
+            if basename in files:
+                return os.path.join(root, basename)
         return None

@@ -2,3 +2,7 @@
 __pycache__/
 
 /.venv
+.venv/
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml
